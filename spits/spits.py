@@ -7,25 +7,44 @@ from os.path import expanduser
 __version__ = "0.1"
 
 
-class SigHandler:
-	def __init__(self, mp):
-		self.mp = mp
-		self.stopped = False
-
-	def sighandler(self, a, b):
-		self.stop()
-
-	def stop(self):
-		for m in self.mp:
-			m.terminate()
-			m.join()
-		self.stopped = True
-
-
 def webserver_process(port):
 	with socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler) as httpd:
 		# print("serving at port", PORT)
 		httpd.serve_forever()
+
+
+class SigHandler:
+	def __init__(self, mplist):
+		self.mplist = mplist
+		self.stopped = False
+
+	def sighandler(self, a, b):
+		self.stop()
+		sys.exit()
+
+	def stop(self):
+		print("sighandler stopping mps ...")
+		for m in self.mplist:
+			m.terminate()
+			m.join()
+		print("... mps stopped!")
+		self.stopped = True
+
+
+MP = multiprocessing.Process(target=webserver_process, args=(8002,))
+MP.daemon = True
+MP.start()
+SH = SigHandler([MP])
+
+
+def checkmtime (path, oldmtime):
+	mtime0 = {}
+	for file in os.listdir(path):
+		if file.startswith("20") and file.endswith("log"):
+			mtime0[file] = os.path.getmtime(path + file)
+	if not (oldmtime == mtime0):
+		return mtime0, True
+	return mtime0, False
 
 
 def scan_maltrail_logs(indexhtml, logdir):
@@ -61,23 +80,24 @@ def scan_maltrail_logs(indexhtml, logdir):
 
 def start():
 
-	print(os.getcwd())
+	global MP, SH
+
+	signal.signal(signal.SIGINT, SH.sighandler)
+	signal.signal(signal.SIGTERM, SH.sighandler)
+
 	indexhtml = os.getcwd() + "/index.html"
 	logdir = expanduser("~") + "/var_log_maltrail/"
 
 	scan_maltrail_logs(indexhtml, logdir)
 
-	mp_webserver = multiprocessing.Process(target=webserver_process, args=(8001,))
-	mp_webserver.daemon = True
-	mp_webserver.start()
-
-	sh = SigHandler([mp_webserver])
-	signal.signal(signal.SIGINT, sh.sighandler)
-	signal.signal(signal.SIGTERM, sh.sighandler)
-
 	print("Press Ctrl-c key to stop")
 
-	while not sh.stopped:
+	mtime = {}
+	while not SH.stopped:
+		mtime, rescan = checkmtime(logdir, mtime)
+		if rescan:
+			print("Maltrail logs changed, rescanning log directory ...")
+			scan_maltrail_logs(indexhtml, logdir)
 		time.sleep(5)
 
 	print("Stopped!")
