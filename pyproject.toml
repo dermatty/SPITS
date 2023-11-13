@@ -8,6 +8,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 
+[tool.poetry.scripts]
+spits = "spits.spits:start"
+
 
 [build-system]
 requires = ["poetry-core"]
