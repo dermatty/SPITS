@@ -1,6 +1,6 @@
 import http.server
 import socketserver
-import os, sys, signal, time
+import os, sys, signal, time, datetime
 import multiprocessing
 from os.path import expanduser
 
@@ -20,7 +20,7 @@ class SigHandler:
 
 	def sighandler(self, a, b):
 		self.stop()
-		sys.exit()
+		# sys.exit()
 
 	def stop(self):
 		print("sighandler stopping mps ...")
@@ -64,13 +64,34 @@ def scan_maltrail_logs(indexhtml, logdir):
 		contents.pop(i_start)
 
 	# read log ips
-	file = logdir + "2023-11-12.log"
-	with open(file, "r") as f:
-		lines = f.readlines()
-	trails = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
 
+	fileslist = []
+	for file in os.listdir(logdir):
+		if file.startswith("20") and file.endswith(".log"):
+			fileslist.append(file)
+
+	MAX_N = 10
+	n = 0
+	trails = []
+	fileslist.sort(reverse=True,key=lambda date: datetime.datetime.strptime(date.split(".log")[0], "%Y-%m-%d"))
+	for file in fileslist:
+		if n >= MAX_N:
+			break
+		n += 1
+		file_incl_path = logdir + file
+		with open(file_incl_path, "r") as f:
+			lines = f.readlines()
+		fileips = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
+		trails.extend(fileips)
+		print("##### " + file + " " + "######: ", len(fileips))
+
+	print("Len trails: ", len(trails))
+	trails_wo_duplicates = list(set(trails))
+	trails_wo_duplicates2 = [x for i, x in enumerate(trails) if x not in trails[:i]]
+	print("Len trails_wo_duplicates: ", len(trails_wo_duplicates))
 	# and insert into html date
-	for i, t in enumerate(trails):
+	for i, t in enumerate(trails_wo_duplicates):
+
 		contents.insert(i_start+i, t)
 
 	# and write to html file
@@ -87,8 +108,9 @@ def start():
 
 	indexhtml = os.getcwd() + "/index.html"
 	logdir = expanduser("~") + "/var_log_maltrail/"
-
-	scan_maltrail_logs(indexhtml, logdir)
+	maindir = expanduser("~") + "/spits"
+	if not os.path.exists(maindir):
+		os.makedirs(maindir)
 
 	print("Press Ctrl-c key to stop")
 
@@ -98,6 +120,9 @@ def start():
 		if rescan:
 			print("Maltrail logs changed, rescanning log directory ...")
 			scan_maltrail_logs(indexhtml, logdir)
-		time.sleep(5)
-
+		for _ in range(10):
+			try:
+				time.sleep(0.5)
+			except KeyboardInterrupt:
+				break
 	print("Stopped!")
