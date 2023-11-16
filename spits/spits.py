@@ -3,19 +3,36 @@ import socketserver
 import os, sys, signal, time, datetime
 import multiprocessing
 from os.path import expanduser
+import configparser
+import logging
+from importlib import metadata
 
-__version__ = "0.1"
+import toml
 
+# this only gives the version of the last pip installation of "app"
+package = "spits"
 
-def webserver_process(port):
-	with socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler) as httpd:
+if os.getcwd() == "/media/nfs/development/GIT/SPITS":
+	__version__ = toml.load("pyproject.toml")["tool"]["poetry"]["version"] + "_dev"
+else:
+	__version__ = metadata.version(package)
+
+def webserver_process(port, directory):
+
+	class Handler(http.server.SimpleHTTPRequestHandler):
+		def __init__(self, *args, **kwargs):
+			super().__init__(*args, directory=directory, **kwargs)
+
+	socketserver.TCPServer.allow_reuse_address = True
+	with socketserver.TCPServer(("", int(port)), Handler) as httpd:
 		# print("serving at port", PORT)
 		httpd.serve_forever()
 
 
 class SigHandler:
-	def __init__(self, mplist):
+	def __init__(self, mplist, logger):
 		self.mplist = mplist
+		self.logger = logger
 		self.stopped = False
 
 	def sighandler(self, a, b):
@@ -23,18 +40,12 @@ class SigHandler:
 		# sys.exit()
 
 	def stop(self):
-		print("sighandler stopping mps ...")
+		self.logger.info("sighandler stopping mps ...")
 		for m in self.mplist:
 			m.terminate()
 			m.join()
-		print("... mps stopped!")
+		self.logger.info("... mps stopped!")
 		self.stopped = True
-
-
-MP = multiprocessing.Process(target=webserver_process, args=(8002,))
-MP.daemon = True
-MP.start()
-SH = SigHandler([MP])
 
 
 def checkmtime (path, oldmtime):
@@ -47,7 +58,7 @@ def checkmtime (path, oldmtime):
 	return mtime0, False
 
 
-def scan_maltrail_logs(indexhtml, logdir):
+def scan_maltrail_logs(indexhtml, logdir, logger):
 	with open(indexhtml, "r") as f:
 		contents = f.readlines()
 
@@ -83,15 +94,15 @@ def scan_maltrail_logs(indexhtml, logdir):
 			lines = f.readlines()
 		fileips = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
 		trails.extend(fileips)
-		print("##### " + file + " " + "######: ", len(fileips))
+		logger.debug("Got log file " + file + " " + ", # of ips: " + str(len(fileips)))
 
-	print("Len trails: ", len(trails))
+	logger.debug("Len trails: " + str(len(trails)))
 	trails_wo_duplicates = list(set(trails))
-	trails_wo_duplicates2 = [x for i, x in enumerate(trails) if x not in trails[:i]]
-	print("Len trails_wo_duplicates: ", len(trails_wo_duplicates))
+	logger.info("Maltrail logs changed, log directory rescanned, # trails_wo_duplicates: "
+				+ str(len(trails_wo_duplicates)))
+
 	# and insert into html date
 	for i, t in enumerate(trails_wo_duplicates):
-
 		contents.insert(i_start+i, t)
 
 	# and write to html file
@@ -99,30 +110,72 @@ def scan_maltrail_logs(indexhtml, logdir):
 		f.writelines(contents)
 
 
+def read_config(maindir, logger):
+
+	cfg_file = maindir + "spits.cfg"
+	try:
+		cfg = configparser.ConfigParser()
+		cfg.read(cfg_file)
+		max_logs=int(cfg["OPTIONS"]["max_logs"])
+		logdir = cfg["OPTIONS"]["logdir"]
+		port = cfg["OPTIONS"]["port"]
+	except Exception as e:
+		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
+		max_logs = 10
+		port = 8112
+		logdir = "/var/log/maltrail/"
+	if not logdir.endswith("/"):
+		logdir += "/"
+	return max_logs, logdir, port
+
 def start():
 
-	global MP, SH
-
-	signal.signal(signal.SIGINT, SH.sighandler)
-	signal.signal(signal.SIGTERM, SH.sighandler)
-
-	indexhtml = os.getcwd() + "/index.html"
-	logdir = expanduser("~") + "/var_log_maltrail/"
-	maindir = expanduser("~") + "/spits"
-	if not os.path.exists(maindir):
+	maindir = expanduser("~") + "/spits/"
+	if not os.path.isdir(maindir):
 		os.makedirs(maindir)
 
-	print("Press Ctrl-c key to stop")
+	logger = logging.getLogger("spits")
+	if __version__.endswith("dev"):
+		logger.setLevel(logging.DEBUG)
+		llevel = "DEBUG"
+	else:
+		logger.setLevel(logging.INFO)
+		llevel = "INFO"
+	fh = logging.FileHandler(maindir + "spits.log", mode="w")
+	formatter = logging.Formatter(
+		"%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+	)
+	fh.setFormatter(formatter)
+	logger.addHandler(fh)
+	logger.info("Welcome to SPITS " + __version__ + "!")
+	logger.info("Setting Loglevel to " + llevel)
+	max_logs, logdir, port = read_config(maindir, logger)
+	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
+
+	current_dir = os.path.dirname(os.path.abspath(__file__))
+	indexhtmlpath = os.path.join(os.path.dirname(current_dir), "spits")
+	indexhtml = os.path.join(indexhtmlpath, "index.html")
+
+	logger.info("index_html is at: " + indexhtmlpath)
+
+	logger.info("Starting web server on port " + str(port))
+
+	MP = multiprocessing.Process(target=webserver_process, args=(port, indexhtmlpath, ))
+	MP.daemon = True
+	MP.start()
+
+	SH = SigHandler([MP], logger)
+	signal.signal(signal.SIGINT, SH.sighandler)
+	signal.signal(signal.SIGTERM, SH.sighandler)
 
 	mtime = {}
 	while not SH.stopped:
 		mtime, rescan = checkmtime(logdir, mtime)
 		if rescan:
-			print("Maltrail logs changed, rescanning log directory ...")
-			scan_maltrail_logs(indexhtml, logdir)
+			scan_maltrail_logs(indexhtml, logdir, logger)
 		for _ in range(10):
 			try:
 				time.sleep(0.5)
 			except KeyboardInterrupt:
 				break
-	print("Stopped!")
+	logger.info("Exited!")

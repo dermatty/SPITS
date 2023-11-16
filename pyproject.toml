@@ -1,16 +1,23 @@
 [tool.poetry]
 name = "spits"
-version = "0.1.0"
+version = "0.1.6"
 description = ""
 authors = ["dermatty <stephan@untergrabner.at>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
+toml = "^0.10.2"
 
 [tool.poetry.scripts]
 spits = "spits.spits:start"
 
+
+[[tool.poetry.source]]
+name = "etec"
+url = "http://etec.iv.at:8123"
+default = false
+secondary = true
 
 [build-system]
 requires = ["poetry-core"]
