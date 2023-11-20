@@ -99,14 +99,19 @@ def scan_logs(indexhtml, logdir, g3_logfile, logger):
 
 	logger.debug("Len trails: " + str(len(trails)))
 	trails_wo_duplicates = list(set(trails))
-	logger.info("Maltrail logs changed, log directory rescanned, # trails_wo_duplicates: "
-				+ str(len(trails_wo_duplicates)))
 
 	# read g3_logdir
 	with open(g3_logfile, "r") as f:
 		lines = f.readlines()
 	g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
 	g3trails_wo_duplicates = list(set(g3trails))
+
+	nr_trails = len(trails_wo_duplicates)
+	nr_g3trails = len(g3trails_wo_duplicates)
+	nr_sum = nr_trails + nr_g3trails
+
+	logger.info("Log directory rescanned, #trails_wo_duplicates: " + str(nr_trails) +
+				" / #g3trails_wo_duplicates: " + str(nr_g3trails) + " --> SUM: " + str(nr_sum))
 
 	logger.debug("g3 trails: " + str(g3trails_wo_duplicates))
 	trails_wo_duplicates.extend(g3trails_wo_duplicates)
