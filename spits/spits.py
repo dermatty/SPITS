@@ -108,13 +108,13 @@ def scan_logs(indexhtml, logdir, g3_logfile, logger):
 
 	nr_trails = len(trails_wo_duplicates)
 	nr_g3trails = len(g3trails_wo_duplicates)
-	nr_sum = nr_trails + nr_g3trails
-
-	logger.info("Log directory rescanned, #trails_wo_duplicates: " + str(nr_trails) +
-				" / #g3trails_wo_duplicates: " + str(nr_g3trails) + " --> SUM: " + str(nr_sum))
 
 	logger.debug("g3 trails: " + str(g3trails_wo_duplicates))
-	trails_wo_duplicates.extend(g3trails_wo_duplicates)
+
+	trails_wo_duplicates.extend(list(set(g3trails_wo_duplicates)))
+	nr_sum = len(trails_wo_duplicates)
+	logger.info("Log directory rescanned, #trails_wo_duplicates: " + str(nr_trails) +
+				" / #g3trails_wo_duplicates: " + str(nr_g3trails) + " --> SUM: " + str(nr_sum))
 
 	# and insert into html date
 	for i, t in enumerate(trails_wo_duplicates):
