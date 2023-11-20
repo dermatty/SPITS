@@ -17,6 +17,7 @@ if os.getcwd() == "/media/nfs/development/GIT/SPITS":
 else:
 	__version__ = metadata.version(package)
 
+
 def webserver_process(port, directory):
 
 	class Handler(http.server.SimpleHTTPRequestHandler):
@@ -46,6 +47,8 @@ class SigHandler:
 			m.join()
 		self.logger.info("... mps stopped!")
 		self.stopped = True
+		self.logger.info("Exited! (sighandler)")
+		sys.exit(0)
 
 
 def checkmtime (path, oldmtime):
@@ -58,7 +61,7 @@ def checkmtime (path, oldmtime):
 	return mtime0, False
 
 
-def scan_maltrail_logs(indexhtml, logdir, logger):
+def scan_logs(indexhtml, logdir, g3_logfile, logger):
 	with open(indexhtml, "r") as f:
 		contents = f.readlines()
 
@@ -74,13 +77,11 @@ def scan_maltrail_logs(indexhtml, logdir, logger):
 	for i in range(i_start, i_end):
 		contents.pop(i_start)
 
-	# read log ips
-
+	# read maltrail log ips
 	fileslist = []
 	for file in os.listdir(logdir):
 		if file.startswith("20") and file.endswith(".log"):
 			fileslist.append(file)
-
 	MAX_N = 10
 	n = 0
 	trails = []
@@ -101,6 +102,15 @@ def scan_maltrail_logs(indexhtml, logdir, logger):
 	logger.info("Maltrail logs changed, log directory rescanned, # trails_wo_duplicates: "
 				+ str(len(trails_wo_duplicates)))
 
+	# read g3_logdir
+	with open(g3_logfile, "r") as f:
+		lines = f.readlines()
+	g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
+	g3trails_wo_duplicates = list(set(g3trails))
+
+	logger.debug("g3 trails: " + str(g3trails_wo_duplicates))
+	trails_wo_duplicates.extend(g3trails_wo_duplicates)
+
 	# and insert into html date
 	for i, t in enumerate(trails_wo_duplicates):
 		contents.insert(i_start+i, t)
@@ -119,14 +129,19 @@ def read_config(maindir, logger):
 		max_logs=int(cfg["OPTIONS"]["max_logs"])
 		logdir = cfg["OPTIONS"]["logdir"]
 		port = cfg["OPTIONS"]["port"]
+		scan_interval = int(cfg["OPTIONS"]["scan_interval"])
+		g3_logfile = cfg["OPTIONS"]["g3_logfile"]
 	except Exception as e:
 		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
 		max_logs = 10
 		port = 8112
 		logdir = "/var/log/maltrail/"
+		g3_logfile = "/media/cifs/dokumente/g3logs"
+		scan_interval = 120
 	if not logdir.endswith("/"):
 		logdir += "/"
-	return max_logs, logdir, port
+	return max_logs, logdir, g3_logfile, port, scan_interval
+
 
 def start():
 
@@ -149,7 +164,7 @@ def start():
 	logger.addHandler(fh)
 	logger.info("Welcome to SPITS " + __version__ + "!")
 	logger.info("Setting Loglevel to " + llevel)
-	max_logs, logdir, port = read_config(maindir, logger)
+	max_logs, logdir, g3_logfile, port, scan_interval = read_config(maindir, logger)
 	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -172,10 +187,10 @@ def start():
 	while not SH.stopped:
 		mtime, rescan = checkmtime(logdir, mtime)
 		if rescan:
-			scan_maltrail_logs(indexhtml, logdir, logger)
-		for _ in range(10):
+			scan_logs(indexhtml, logdir, g3_logfile, logger)
+		for _ in range(scan_interval * 2):
 			try:
 				time.sleep(0.5)
 			except KeyboardInterrupt:
 				break
-	logger.info("Exited!")
+	logger.info("Exited! (main)")
