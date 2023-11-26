@@ -61,7 +61,7 @@ def checkmtime (path, oldmtime):
 	return mtime0, False
 
 
-def scan_logs(indexhtml, logdir, g3_logfile, logger):
+def scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger):
 	with open(indexhtml, "r") as f:
 		contents = f.readlines()
 
@@ -82,39 +82,37 @@ def scan_logs(indexhtml, logdir, g3_logfile, logger):
 	for file in os.listdir(logdir):
 		if file.startswith("20") and file.endswith(".log"):
 			fileslist.append(file)
-	MAX_N = 10
 	n = 0
 	trails = []
 	fileslist.sort(reverse=True,key=lambda date: datetime.datetime.strptime(date.split(".log")[0], "%Y-%m-%d"))
 	for file in fileslist:
-		if n >= MAX_N:
+		if n >= max_logs:
 			break
 		n += 1
 		file_incl_path = logdir + file
 		with open(file_incl_path, "r") as f:
 			lines = f.readlines()
-		fileips = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
+		fileips0 = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
+		fileips = list(set(fileips0))
 		trails.extend(fileips)
-		logger.debug("Got log file " + file + " " + ", # of ips: " + str(len(fileips)))
+		logger.debug("Log file " + file + " " + ", # ips (raw / adjusted): " + str(len(fileips0)) + " / " +
+					 str(len(fileips)))
 
-	logger.debug("Len trails: " + str(len(trails)))
-	trails_wo_duplicates = list(set(trails))
-
-	# read g3_logdir
+	# read gcuk_logdir
 	with open(g3_logfile, "r") as f:
 		lines = f.readlines()
 	g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
 	g3trails_wo_duplicates = list(set(g3trails))
 
-	nr_trails = len(trails_wo_duplicates)
-	nr_g3trails = len(g3trails_wo_duplicates)
+	nr_trails_unadjusted = len(trails)
+	trails.extend(g3trails_wo_duplicates)
+	nr_trails_incl_g3 = len(trails)
+	trails_wo_duplicates = list(set(trails))
+	nr_trails_adjusted = len(trails_wo_duplicates)
 
-	logger.debug("g3 trails: " + str(g3trails_wo_duplicates))
-
-	trails_wo_duplicates.extend(list(set(g3trails_wo_duplicates)))
-	nr_sum = len(trails_wo_duplicates)
-	logger.info("Log directory rescanned, #trails_wo_duplicates: " + str(nr_trails) +
-				" / #g3trails_wo_duplicates: " + str(nr_g3trails) + " --> SUM: " + str(nr_sum))
+	logger.info(str(n) + " log files rescanned, len trails: " + str(nr_trails_unadjusted) + " (raw), " +
+				str(nr_trails_incl_g3) + " (raw+guck), " +
+				str(nr_trails_adjusted) + "(raw+guck, adjusted)")
 
 	# and insert into html date
 	for i, t in enumerate(trails_wo_duplicates):
@@ -192,7 +190,7 @@ def start():
 	while not SH.stopped:
 		mtime, rescan = checkmtime(logdir, mtime)
 		if rescan:
-			scan_logs(indexhtml, logdir, g3_logfile, logger)
+			scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger)
 		for _ in range(scan_interval * 2):
 			try:
 				time.sleep(0.5)
