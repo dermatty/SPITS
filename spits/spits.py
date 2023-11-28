@@ -9,6 +9,8 @@ from importlib import metadata
 
 import toml
 
+CRITICAL_TRAILS = ["known attacker", "malware", "tor exit node"]
+
 # this only gives the version of the last pip installation of "app"
 package = "spits"
 
@@ -16,6 +18,15 @@ if os.getcwd() == "/media/nfs/development/GIT/SPITS":
 	__version__ = toml.load("pyproject.toml")["tool"]["poetry"]["version"] + "_dev"
 else:
 	__version__ = metadata.version(package)
+
+
+def one_of_is_in_(elements, inlist):
+	matched = False
+	for el0 in elements:
+		if el0 in inlist:
+			matched = True
+			break
+	return matched
 
 
 def webserver_process(port, directory):
@@ -92,11 +103,12 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger):
 		file_incl_path = logdir + file
 		with open(file_incl_path, "r") as f:
 			lines = f.readlines()
-		fileips0 = [l.split()[3]+"\n" for l in lines if "known attacker" in l]
+		fileips0 = [l.split()[3] + "\n" for l in lines if [c for c in CRITICAL_TRAILS if c in l]]
+		# fileips0 = [l.split()[3]+"\n" for l in lines if one_of_is_in_(CRITICAL_TRAILS, l)]
 		fileips = list(set(fileips0))
 		trails.extend(fileips)
 		logger.debug("Log file " + file + " " + ", # ips (raw / adjusted): " + str(len(fileips0)) + " / " +
-					 str(len(fileips)))
+					  str(len(fileips)))
 
 	# read gcuk_logdir
 	with open(g3_logfile, "r") as f:
