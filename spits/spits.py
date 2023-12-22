@@ -72,7 +72,7 @@ def checkmtime (path, oldmtime):
 	return mtime0, False
 
 
-def scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger):
+def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger):
 	with open(indexhtml, "r") as f:
 		contents = f.readlines()
 
@@ -110,21 +110,32 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger):
 		logger.debug("Log file " + file + " " + ", # ips (raw / adjusted): " + str(len(fileips0)) + " / " +
 					  str(len(fileips)))
 
+	nr_trails_unadjusted = len(trails)
+
 	# read gcuk_logdir
 	with open(g3_logfile, "r") as f:
 		lines = f.readlines()
 	g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
 	g3trails_wo_duplicates = list(set(g3trails))
-
-	nr_trails_unadjusted = len(trails)
 	trails.extend(g3trails_wo_duplicates)
 	nr_trails_incl_g3 = len(trails)
+
+	# read suricata_ids
+	with open(suricata_idsfile, "r") as f:
+		lines = f.readlines()
+	idstrails = [l.split()[0] + "\n" for l in lines]
+	idstrails_wo_duplicates = list(set(idstrails))
+	print(idstrails_wo_duplicates)
+	trails.extend(idstrails_wo_duplicates)
+	nr_trails_incl_g3_ids = len(trails)
+
 	trails_wo_duplicates = list(set(trails))
 	nr_trails_adjusted = len(trails_wo_duplicates)
 
 	logger.info(str(n) + " log files rescanned, len trails: " + str(nr_trails_unadjusted) + " (raw), " +
 				str(nr_trails_incl_g3) + " (raw+guck), " +
-				str(nr_trails_adjusted) + "(raw+guck, adjusted)")
+				str(nr_trails_incl_g3_ids) + " (raw+guck+ids), " +
+				str(nr_trails_adjusted) + "(raw+guck+ids, adjusted)")
 
 	# and insert into html date
 	for i, t in enumerate(trails_wo_duplicates):
@@ -146,16 +157,18 @@ def read_config(maindir, logger):
 		port = cfg["OPTIONS"]["port"]
 		scan_interval = int(cfg["OPTIONS"]["scan_interval"])
 		g3_logfile = cfg["OPTIONS"]["g3_logfile"]
+		suricata_idsfile = cfg["OPTIONS"]["suricata_idsfile"]
 	except Exception as e:
 		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
 		max_logs = 10
 		port = 8112
 		logdir = "/var/log/maltrail/"
 		g3_logfile = "/media/cifs/dokumente/g3logs"
+		suricata_idsfile = cfg["OPTIONS"]["suricata_idsfile"]
 		scan_interval = 120
 	if not logdir.endswith("/"):
 		logdir += "/"
-	return max_logs, logdir, g3_logfile, port, scan_interval
+	return max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval
 
 
 def start():
@@ -179,7 +192,7 @@ def start():
 	logger.addHandler(fh)
 	logger.info("Welcome to SPITS " + __version__ + "!")
 	logger.info("Setting Loglevel to " + llevel)
-	max_logs, logdir, g3_logfile, port, scan_interval = read_config(maindir, logger)
+	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval = read_config(maindir, logger)
 	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -199,10 +212,15 @@ def start():
 	signal.signal(signal.SIGTERM, SH.sighandler)
 
 	mtime = {}
+	mtime0_idsfile = 0
 	while not SH.stopped:
+		mtime_idsfile = os.path.getmtime(suricata_idsfile)
+		rescan_idsfile = (mtime_idsfile > mtime0_idsfile)
 		mtime, rescan = checkmtime(logdir, mtime)
-		if rescan:
-			scan_logs(max_logs, indexhtml, logdir, g3_logfile, logger)
+		if rescan or rescan_idsfile:
+			if rescan_idsfile:
+				mtime0_idsfile = mtime_idsfile
+			scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 		for _ in range(scan_interval * 2):
 			try:
 				time.sleep(0.5)
