@@ -6,6 +6,7 @@ from os.path import expanduser
 import configparser
 import logging
 from importlib import metadata
+import json
 
 import toml
 
@@ -123,13 +124,21 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 	# read suricata_ids
 	with open(suricata_idsfile, "r") as f:
 		lines = f.readlines()
-	idstrails = [l.split()[0] + "\n" for l in lines]
+	idstrails = []
+	for l in lines:
+		try:
+			l0 = json.loads("{" + l.split("]: {")[1])
+			if not l0["src_ip"].startswith("192.168."):
+				idstrails.append(l0["src_ip"] + "\n")
+		except Exception:
+			pass
 	idstrails_wo_duplicates = list(set(idstrails))
-	print(idstrails_wo_duplicates)
 	trails.extend(idstrails_wo_duplicates)
 	nr_trails_incl_g3_ids = len(trails)
 
-	trails_wo_duplicates = list(set(trails))
+	trails_wo_duplicates = [tr for tr in list(set(trails)) if tr.count(".") == 3 and
+							all(tr0.isdigit() or tr0 == "." or tr0 == "\n" for tr0 in tr)
+							]
 	nr_trails_adjusted = len(trails_wo_duplicates)
 
 	logger.info(str(n) + " log files rescanned, len trails: " + str(nr_trails_unadjusted) + " (raw), " +
@@ -157,14 +166,14 @@ def read_config(maindir, logger):
 		port = cfg["OPTIONS"]["port"]
 		scan_interval = int(cfg["OPTIONS"]["scan_interval"])
 		g3_logfile = cfg["OPTIONS"]["g3_logfile"]
-		suricata_idsfile = cfg["OPTIONS"]["suricata_idsfile"]
+		suricata_idsfile = cfg["OPTIONS"]["rsyslog_suricatafile"]
 	except Exception as e:
 		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
 		max_logs = 10
 		port = 8112
 		logdir = "/var/log/maltrail/"
 		g3_logfile = "/media/cifs/dokumente/g3logs"
-		suricata_idsfile = cfg["OPTIONS"]["suricata_idsfile"]
+		suricata_idsfile = "/var/log/opnsense.log"
 		scan_interval = 120
 	if not logdir.endswith("/"):
 		logdir += "/"
