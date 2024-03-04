@@ -7,7 +7,6 @@ import configparser
 import logging
 from importlib import metadata
 import json
-
 import toml
 
 CRITICAL_TRAILS = ["known attacker", "malware", "tor exit node"]
@@ -127,12 +126,18 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 	idstrails = []
 	for l in lines:
 		try:
-			l0 = json.loads("{" + l.split("]: {")[1])
-			if not l0["src_ip"].startswith("192.168."):
-				idstrails.append(l0["src_ip"] + "\n")
+			l0 = l.split("wDrop")[1]
+			if l0.split("->")[-1].lstrip().startswith("192.168."):
+				src_ip = l0.split(" ")[-3]
+				src_ip = src_ip.split(":")[0]
+				idstrails.append(src_ip + "\n")
+			#l0 = json.loads("{" + l.split("]: {")[1])
+			#if not l0["src_ip"].startswith("192.168.") and l0():
+			#		idstrails.append(l0["src_ip"] + "\n")
 		except Exception:
 			pass
 	idstrails_wo_duplicates = list(set(idstrails))
+	print(idstrails_wo_duplicates)
 	trails.extend(idstrails_wo_duplicates)
 	nr_trails_incl_g3_ids = len(trails)
 
@@ -226,6 +231,7 @@ def start():
 		mtime_idsfile = os.path.getmtime(suricata_idsfile)
 		rescan_idsfile = (mtime_idsfile > mtime0_idsfile)
 		mtime, rescan = checkmtime(logdir, mtime)
+
 		if rescan or rescan_idsfile:
 			if rescan_idsfile:
 				mtime0_idsfile = mtime_idsfile
