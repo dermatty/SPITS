@@ -137,7 +137,6 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 		except Exception:
 			pass
 	idstrails_wo_duplicates = list(set(idstrails))
-	print(idstrails_wo_duplicates)
 	trails.extend(idstrails_wo_duplicates)
 	nr_trails_incl_g3_ids = len(trails)
 
