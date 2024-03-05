@@ -6,7 +6,6 @@ from os.path import expanduser
 import configparser
 import logging
 from importlib import metadata
-import json
 import toml
 
 CRITICAL_TRAILS = ["known attacker", "malware", "tor exit node"]
@@ -73,11 +72,11 @@ def checkmtime (path, oldmtime):
 
 
 def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger):
-	with open(indexhtml, "r") as f:
-		contents = f.readlines()
+	#with open(indexhtml, "r") as f:
+	#	contents = f.readlines()
 
 	# remove ips from content
-	i_start = -1
+	"""i_start = -1
 	i_end = -1
 	for i, c in enumerate(contents):
 		if (not c.strip().startswith("<")) and i_start == -1:
@@ -86,7 +85,7 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 			i_end = i
 			break
 	for i in range(i_start, i_end):
-		contents.pop(i_start)
+		contents.pop(i_start)"""
 
 	# read maltrail log ips
 	fileslist = []
@@ -151,12 +150,12 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 				str(nr_trails_adjusted) + "(raw+guck+ids, adjusted)")
 
 	# and insert into html date
-	for i, t in enumerate(trails_wo_duplicates):
-		contents.insert(i_start+i, t)
+	#for i, t in enumerate(trails_wo_duplicates):
+	#	contents.insert(i_start+i, t)
 
 	# and write to html file
 	with open(indexhtml, "w") as f:
-		f.writelines(contents)
+		f.writelines(trails_wo_duplicates)
 
 
 def read_config(maindir, logger):
@@ -241,3 +240,5 @@ def start():
 			except KeyboardInterrupt:
 				break
 	logger.info("Exited! (main)")
+# <link rel="shortcut icon" type="image/png" href="virus.png">
+#       <meta http-equiv="refresh" content="30">
