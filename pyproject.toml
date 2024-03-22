@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "spits"
-version = "0.1.18   "
+version = "0.1.19   "
 description = ""
 authors = ["dermatty <stephan@untergrabner.at>"]
 readme = "README.md"

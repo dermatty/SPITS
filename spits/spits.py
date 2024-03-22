@@ -100,43 +100,55 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 			break
 		n += 1
 		file_incl_path = logdir + file
-		with open(file_incl_path, "r") as f:
-			lines = f.readlines()
-		fileips0 = [l.split()[3] + "\n" for l in lines if [c for c in CRITICAL_TRAILS if c in l]]
-		# fileips0 = [l.split()[3]+"\n" for l in lines if one_of_is_in_(CRITICAL_TRAILS, l)]
-		fileips = list(set(fileips0))
-		trails.extend(fileips)
-		logger.debug("Log file " + file + " " + ", # ips (raw / adjusted): " + str(len(fileips0)) + " / " +
-					  str(len(fileips)))
+		try:
+			with open(file_incl_path, "r") as f:
+				lines = f.readlines()
+			fileips0 = [l.split()[3] + "\n" for l in lines if [c for c in CRITICAL_TRAILS if c in l]]
+			# fileips0 = [l.split()[3]+"\n" for l in lines if one_of_is_in_(CRITICAL_TRAILS, l)]
+			fileips = list(set(fileips0))
+			trails.extend(fileips)
+			logger.debug("Log file " + file + " " + ", # ips (raw / adjusted): " + str(len(fileips0)) + " / " +
+						  str(len(fileips)))
+		except Exception as e:
+			logger.warning(str(e) + ": cannot open logdir-file " + str(file_incl_path))
 
 	nr_trails_unadjusted = len(trails)
 
 	# read gcuk_logdir
-	with open(g3_logfile, "r") as f:
-		lines = f.readlines()
-	g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
-	g3trails_wo_duplicates = list(set(g3trails))
-	trails.extend(g3trails_wo_duplicates)
+	try:
+		with open(g3_logfile, "r") as f:
+			lines = f.readlines()
+		g3trails = [l.split()[8][3:-1] + "\n" for l in lines if "Invalid request from ip" in l]
+		g3trails_wo_duplicates = list(set(g3trails))
+		trails.extend(g3trails_wo_duplicates)
+	except Exception as e:
+		logger.warning(str(e) + ": cannot open g3_logfile, skipping ...")
+
 	nr_trails_incl_g3 = len(trails)
 
 	# read suricata_ids
-	with open(suricata_idsfile, "r") as f:
-		lines = f.readlines()
-	idstrails = []
-	for l in lines:
-		try:
-			l0 = l.split("wDrop")[1]
-			if l0.split("->")[-1].lstrip().startswith("192.168."):
-				src_ip = l0.split(" ")[-3]
-				src_ip = src_ip.split(":")[0]
-				idstrails.append(src_ip + "\n")
-			#l0 = json.loads("{" + l.split("]: {")[1])
-			#if not l0["src_ip"].startswith("192.168.") and l0():
-			#		idstrails.append(l0["src_ip"] + "\n")
-		except Exception:
-			pass
-	idstrails_wo_duplicates = list(set(idstrails))
-	trails.extend(idstrails_wo_duplicates)
+	try:
+		with open(suricata_idsfile, "r") as f:
+			lines = f.readlines()
+		idstrails = []
+		for l in lines:
+			try:
+				l0 = l.split("wDrop")[1]
+				if l0.split("->")[-1].lstrip().startswith("192.168."):
+					src_ip = l0.split(" ")[-3]
+					src_ip = src_ip.split(":")[0]
+					idstrails.append(src_ip + "\n")
+				#l0 = json.loads("{" + l.split("]: {")[1])
+				#if not l0["src_ip"].startswith("192.168.") and l0():
+				#		idstrails.append(l0["src_ip"] + "\n")
+			except Exception:
+				pass
+		idstrails_wo_duplicates = list(set(idstrails))
+		trails.extend(idstrails_wo_duplicates)
+	except Exception as e:
+		logger.warning(str(e) + ": cannot open rsyslog_suricatafile, skipping ...")
+
+
 	nr_trails_incl_g3_ids = len(trails)
 
 	trails_wo_duplicates = [tr for tr in list(set(trails)) if tr.count(".") == 3 and
@@ -197,9 +209,7 @@ def start():
 		logger.setLevel(logging.INFO)
 		llevel = "INFO"
 	fh = logging.FileHandler(maindir + "spits.log", mode="w")
-	formatter = logging.Formatter(
-		"%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-	)
+	formatter = logging.Formatter("%(asctime)s - %(levelname)s / %(filename)s:%(lineno)s (%(funcName)s) - '%(message)s'", "%d-%m-%Y %H:%M:%S")
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 	logger.info("Welcome to SPITS " + __version__ + "!")
