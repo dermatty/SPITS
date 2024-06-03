@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "spits"
-version = "0.1.19   "
+version = "0.2.0"
 description = ""
 authors = ["dermatty <stephan@untergrabner.at>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 toml = "^0.10.2"
 requests = "^2.31.0"
 

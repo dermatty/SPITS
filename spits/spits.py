@@ -71,7 +71,7 @@ def checkmtime (path, oldmtime):
 	return mtime0, False
 
 
-def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger):
+def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, whitelist_file, logger):
 	#with open(indexhtml, "r") as f:
 	#	contents = f.readlines()
 
@@ -165,9 +165,22 @@ def scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
 	#for i, t in enumerate(trails_wo_duplicates):
 	#	contents.insert(i_start+i, t)
 
+	# read whitelist
+	try:
+		with open(whitelist_file, "r") as f:
+			lines = f.readlines()
+			for l in lines:
+				if l in trails_wo_duplicates:
+					l0 = l.replace("\n", "")
+					logger.info(str(l0) + " is whitelisted, removing ...")
+					trails_wo_duplicates.remove(l)
+	except Exception as e:
+		logger.warning(str(e) + ": cannot read/open whitelist file, skipping ....")
+
 	# and write to html file
 	with open(indexhtml, "w") as f:
 		f.writelines(trails_wo_duplicates)
+
 
 
 def read_config(maindir, logger):
@@ -182,6 +195,7 @@ def read_config(maindir, logger):
 		scan_interval = int(cfg["OPTIONS"]["scan_interval"])
 		g3_logfile = cfg["OPTIONS"]["g3_logfile"]
 		suricata_idsfile = cfg["OPTIONS"]["rsyslog_suricatafile"]
+		whitelist_file = cfg["OPTIONS"]["whitelist"]
 	except Exception as e:
 		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
 		max_logs = 10
@@ -189,10 +203,11 @@ def read_config(maindir, logger):
 		logdir = "/var/log/maltrail/"
 		g3_logfile = "/media/cifs/dokumente/g3logs"
 		suricata_idsfile = "/var/log/opnsense.log"
+		whitelist_file = maindir + "whitelist.txt"
 		scan_interval = 120
 	if not logdir.endswith("/"):
 		logdir += "/"
-	return max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval
+	return max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file
 
 
 def start():
@@ -214,7 +229,7 @@ def start():
 	logger.addHandler(fh)
 	logger.info("Welcome to SPITS " + __version__ + "!")
 	logger.info("Setting Loglevel to " + llevel)
-	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval = read_config(maindir, logger)
+	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file = read_config(maindir, logger)
 	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -243,7 +258,7 @@ def start():
 		if rescan or rescan_idsfile:
 			if rescan_idsfile:
 				mtime0_idsfile = mtime_idsfile
-			scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, logger)
+			scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, whitelist_file, logger)
 		for _ in range(scan_interval * 2):
 			try:
 				time.sleep(0.5)
