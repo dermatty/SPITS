@@ -7,14 +7,15 @@ import configparser
 import logging
 from importlib import metadata
 import toml
+from spits import __version__, __appname__
 
 CRITICAL_TRAILS = ["known attacker", "malware", "tor exit node"]
 
 # this only gives the version of the last pip installation of "app"
-package = "spits"
+package = __appname__
 
 if os.getcwd() == "/media/nfs/development/GIT/SPITS":
-	__version__ = toml.load("pyproject.toml")["tool"]["poetry"]["version"] + "_dev"
+	__version__ = toml.load("pyproject.toml")["project"]["version"] + "_dev"
 else:
 	__version__ = metadata.version(package)
 

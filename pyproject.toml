@@ -1,25 +1,31 @@
-[tool.poetry]
+[project]
 name = "spits"
-version = "0.2.1"
-description = ""
-authors = ["dermatty <stephan@untergrabner.at>"]
+version = "0.2.3"
+description = "fail2ban alternative for opnsense & suricata"
+authors = [
+    {name = "dermatty",email = "stephan@untergrabner.at"}
+]
+license = "GPL v3"
 readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+    "toml>=0.10.2",
+    "requests>=2.31.0",
+    "psutil (>=7.0.0,<8.0.0)",
+    ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
-toml = "^0.10.2"
-requests = "^2.31.0"
+python = ">=3.13,<4.0"
 
 [tool.poetry.scripts]
 spits = "spits.spits:start"
 
-
 [[tool.poetry.source]]
-name = "etec"
-url = "http://etec.iv.at:8123"
-default = false
-secondary = true
+name = "btec"
+url = "http://btec.iv.at:8123"
+priority = "supplemental"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
