@@ -280,8 +280,6 @@ def start():
 	logger.info("Setting Loglevel to " + llevel)
 	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file, serverlist\
 		= read_config(maindir, logger)
-	# update_ext_server_whitelist(serverlist, whitelist_file, logger)
-	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
 	indexhtmlpath = os.path.join(os.path.dirname(current_dir), "spits")
@@ -302,12 +300,12 @@ def start():
 	mtime = {}
 	mtime0_idsfile = 0
 	while not SH.stopped:
-		whitelist_is_updated = update_ext_server_whitelist
+		whitelist_is_updated = update_ext_server_whitelist(serverlist, whitelist_file, logger)
 		mtime_idsfile = os.path.getmtime(suricata_idsfile)
 		rescan_idsfile = (mtime_idsfile > mtime0_idsfile)
 		mtime, rescan = checkmtime(logdir, mtime)
 
-		if whitelist_is_updated or whrescan or rescan_idsfile:
+		if whitelist_is_updated or rescan or rescan_idsfile:
 			if rescan_idsfile:
 				mtime0_idsfile = mtime_idsfile
 			scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, whitelist_file, blacklist_file, logger)
