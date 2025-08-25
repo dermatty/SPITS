@@ -246,15 +246,18 @@ def update_ext_server_whitelist(serverlist, whitelist_file, logger):
 						pass
 		except Exception as e:
 			logger.warning("Cannot get ip address of server " + str(s) + ", skipping: " + str(e))
+	whitelist_updated = False
 	if not iplist:
-		return
+		return whitelist_updated
 	try:
 		with open(whitelist_file, whitelist_file_attribute) as f:
 			for ip in iplist:
 				if ip not in whitelist_lines:
 					f.write(ip + "\n")
+					whitelist_updated = True
 	except Exception as e:
 		logger.error("whitelist modify/write error: " + str(e))
+	return whitelist_updated
 
 def start():
 
@@ -277,8 +280,7 @@ def start():
 	logger.info("Setting Loglevel to " + llevel)
 	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file, serverlist\
 		= read_config(maindir, logger)
-	update_ext_server_whitelist(serverlist, whitelist_file, logger)
-	sys.exit()
+	# update_ext_server_whitelist(serverlist, whitelist_file, logger)
 	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -300,11 +302,12 @@ def start():
 	mtime = {}
 	mtime0_idsfile = 0
 	while not SH.stopped:
+		whitelist_is_updated = update_ext_server_whitelist
 		mtime_idsfile = os.path.getmtime(suricata_idsfile)
 		rescan_idsfile = (mtime_idsfile > mtime0_idsfile)
 		mtime, rescan = checkmtime(logdir, mtime)
 
-		if rescan or rescan_idsfile:
+		if whitelist_is_updated or whrescan or rescan_idsfile:
 			if rescan_idsfile:
 				mtime0_idsfile = mtime_idsfile
 			scan_logs(max_logs, indexhtml, logdir, g3_logfile, suricata_idsfile, whitelist_file, blacklist_file, logger)
