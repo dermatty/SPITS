@@ -1,6 +1,6 @@
 [project]
 name = "spits"
-version = "0.2.3"
+version = "0.2.4"
 description = "fail2ban alternative for opnsense & suricata"
 authors = [
     {name = "dermatty",email = "stephan@untergrabner.at"}
@@ -13,6 +13,7 @@ dependencies = [
     "toml>=0.10.2",
     "requests>=2.31.0",
     "psutil (>=7.0.0,<8.0.0)",
+    "importlib (>=1.0.4,<2.0.0)",
     ]
 
 [tool.poetry.dependencies]

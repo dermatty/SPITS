@@ -5,20 +5,18 @@ import multiprocessing
 from os.path import expanduser
 import configparser
 import logging
-from importlib import metadata
-import toml
-from spits import __version__, __appname__
+import subprocess, json
+
+from spits import __version__, __appname__, __startmode__
 
 CRITICAL_TRAILS = ["known attacker", "malware", "tor exit node"]
 
 # this only gives the version of the last pip installation of "app"
 package = __appname__
 
-if os.getcwd() == "/media/nfs/development/GIT/SPITS":
-	__version__ = toml.load("pyproject.toml")["project"]["version"] + "_dev"
-else:
-	__version__ = metadata.version(package)
 
+if __startmode__ == "dev":
+	__version__ = __version__ + "_dev"
 
 def one_of_is_in_(elements, inlist):
 	matched = False
@@ -208,6 +206,7 @@ def read_config(maindir, logger):
 		suricata_idsfile = cfg["OPTIONS"]["rsyslog_suricatafile"]
 		whitelist_file = cfg["OPTIONS"]["whitelist"]
 		blacklist_file = cfg["OPTIONS"]["blacklist"]
+		serverlist = json.loads(cfg["OPTIONS"]["external_uptime_serverlist"])
 	except Exception as e:
 		logger.warning(str(e) + ": no config file found or config file invalid, setting to defaults!")
 		max_logs = 10
@@ -220,8 +219,42 @@ def read_config(maindir, logger):
 		scan_interval = 120
 	if not logdir.endswith("/"):
 		logdir += "/"
-	return max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file
+	return max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file, serverlist
 
+def update_ext_server_whitelist(serverlist, whitelist_file, logger):
+	try:
+		with open(whitelist_file, "r") as f:
+			whitelist_lines_raw = f.readlines()
+			whitelist_lines = [l.rstrip() for l in whitelist_lines_raw]
+			whitelist_file_attribute = "a"
+	except (Exception, ):
+		logger.warning("No whitelist file exists, possibly creating new one ...")
+		whitelist_file_attribute = "w"
+		whitelist_lines = []
+
+	iplist = []
+	for s in serverlist:
+		try:
+			ssh = subprocess.Popen(["nslookup", s], stdout=subprocess.PIPE)
+			sshres = ssh.stdout.readlines()
+			for ss in sshres:
+				s0 = ss.decode("utf-8")
+				if s0.startswith("Address"):
+					try:
+						iplist.append(s0.rstrip().split(": ")[1])
+					except (Exception, ):
+						pass
+		except Exception as e:
+			logger.warning("Cannot get ip address of server " + str(s) + ", skipping: " + str(e))
+	if not iplist:
+		return
+	try:
+		with open(whitelist_file, whitelist_file_attribute) as f:
+			for ip in iplist:
+				if ip not in whitelist_lines:
+					f.write(ip + "\n")
+	except Exception as e:
+		logger.error("whitelist modify/write error: " + str(e))
 
 def start():
 
@@ -242,8 +275,10 @@ def start():
 	logger.addHandler(fh)
 	logger.info("Welcome to SPITS " + __version__ + "!")
 	logger.info("Setting Loglevel to " + llevel)
-	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file\
+	max_logs, logdir, g3_logfile, suricata_idsfile, port, scan_interval, whitelist_file, blacklist_file, serverlist\
 		= read_config(maindir, logger)
+	update_ext_server_whitelist(serverlist, whitelist_file, logger)
+	sys.exit()
 	logger.info("max_logs: " + str(max_logs) + " / logdir: " + logdir)
 
 	current_dir = os.path.dirname(os.path.abspath(__file__))
